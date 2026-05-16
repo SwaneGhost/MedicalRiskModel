@@ -20,3 +20,10 @@ path = kagglehub.competition_download('widsdatathon2020')
 
 print("Path to competition files:", path)
  ```
+
+## Data
+
+### Feature Explanations 
+
+Feature explanation is in the file ```WiDS Datathon 2020 Dictionary.csv```
+
