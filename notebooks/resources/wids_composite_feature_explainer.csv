@@ -1,0 +1,31 @@
+feature_name,calculation_from_current_features,meaning_or_use
+gcs_total,gcs_eyes_apache + gcs_motor_apache + gcs_verbal_apache; treat cautiously when gcs_unable_apache = 1,"Standard composite of eye, motor, and verbal response. Lower values indicate worse neurologic status or impaired consciousness."
+neurologic_sofa_like,Score from gcs_total: 0 if 15; 1 if 13-14; 2 if 10-12; 3 if 6-9; 4 if <6,"SOFA-inspired neurologic dysfunction component. Useful as an interpretable severity feature, not a complete diagnosis."
+shock_index_h1,h1_heartrate_max / h1_sysbp_min,Early hemodynamic stress proxy combining tachycardia and low systolic blood pressure during the first ICU hour.
+shock_index_d1,d1_heartrate_max / d1_sysbp_min,First-24-hour hemodynamic stress proxy combining high heart rate and low systolic blood pressure.
+modified_shock_index_h1,h1_heartrate_max / h1_mbp_min,Early shock-like hemodynamic proxy using mean blood pressure instead of systolic blood pressure.
+modified_shock_index_d1,d1_heartrate_max / d1_mbp_min,First-24-hour shock-like hemodynamic proxy using mean blood pressure instead of systolic blood pressure.
+rate_pressure_product_h1,h1_heartrate_max * h1_sysbp_max,Approximate early cardiac workload / myocardial oxygen demand proxy. Uses first-hour maximum heart rate and systolic blood pressure.
+rate_pressure_product_d1,d1_heartrate_max * d1_sysbp_max,Approximate first-24-hour cardiac workload / myocardial oxygen demand proxy.
+pulse_pressure_proxy_h1,h1_sysbp_max - h1_diasbp_min,Approximate pulse-pressure window during the first hour. Not a true paired pulse pressure because measurements are aggregated min/max values.
+pulse_pressure_proxy_d1,d1_sysbp_max - d1_diasbp_min,Approximate pulse-pressure window during the first 24 hours. Use cautiously because max/min values may not come from the same time point.
+bp_instability_d1,d1_sysbp_max - d1_sysbp_min,Captures systolic blood-pressure variability/instability across the first ICU day.
+map_instability_d1,d1_mbp_max - d1_mbp_min,Captures mean arterial pressure variability/instability across the first ICU day.
+heart_rate_instability_d1,d1_heartrate_max - d1_heartrate_min,Captures heart-rate variability/instability during the first ICU day.
+respiratory_rate_instability_d1,d1_resprate_max - d1_resprate_min,Captures respiratory-rate variability/instability during the first ICU day.
+spo2_instability_d1,d1_spo2_max - d1_spo2_min,Captures oxygen-saturation variability/drop during the first ICU day.
+temperature_instability_d1,d1_temp_max - d1_temp_min,Captures fever/hypothermia variability during the first ICU day.
+qsofa_like_h1,I(h1_sysbp_min <= 100) + I(h1_resprate_max >= 22) + I(gcs_total <= 14),"First-hour qSOFA-inspired risk screen using low systolic BP, high respiratory rate, and altered mentation. Use as a proxy, not a formal sepsis diagnosis."
+qsofa_like_d1,I(d1_sysbp_min <= 100) + I(d1_resprate_max >= 22) + I(gcs_total <= 14),"First-24-hour qSOFA-inspired risk screen. Useful for interpretable risk stratification, not for automatic clinical decisions."
+sirs_like_d1,I(d1_temp_max > 38 OR d1_temp_min < 36) + I(d1_heartrate_max > 90) + I(d1_resprate_max > 20 OR d1_arterial_pco2_min < 32) + I(d1_wbc_max > 12 OR d1_wbc_min < 4),"SIRS-inspired inflammatory response proxy using temperature, heart rate, respiratory rate/PaCO2, and WBC count."
+pao2_fio2_min,Prefer d1_pao2fio2ratio_min when available; otherwise approximate as d1_arterial_po2_min / fio2_apache,"Oxygenation ratio. Lower values suggest worse oxygenation. If using approximation, note that PO2 and FiO2 may not be exactly time-matched."
+ards_oxygenation_severity_proxy,Based on pao2_fio2_min: >300 = none/low; 200-300 = mild; 100-200 = moderate; <=100 = severe,"ARDS-inspired oxygenation severity category. This is only an oxygenation proxy because formal ARDS definitions also require timing, imaging, and ventilatory context."
+respiratory_support_flag,"max(intubated_apache, ventilated_apache)",Indicates whether invasive airway/ventilation support was present in the APACHE-related first-24-hour data.
+respiratory_severity_proxy,I(respiratory_support_flag = 1) + I(pao2_fio2_min < 300) + I(d1_spo2_min < 90),"Simple respiratory severity proxy combining support status, oxygenation ratio, and low oxygen saturation."
+coagulation_sofa_like,Score from d1_platelets_min: 0 if >=150; 1 if <150; 2 if <100; 3 if <50; 4 if <20,SOFA-inspired coagulation dysfunction component based on platelet count.
+liver_sofa_like,Score from d1_bilirubin_max in micromol/L: 0 if <20; 1 if 20-32; 2 if 33-101; 3 if 102-204; 4 if >204,SOFA-inspired liver dysfunction component based on bilirubin.
+cardiovascular_sofa_like_minimal,I(d1_mbp_min < 70),Minimal SOFA-inspired cardiovascular component. Only captures low MAP because vasopressor dose variables are not available.
+renal_sofa_like,"Use worst of creatinine and urine output: creatinine score from d1_creatinine_max in micromol/L using SOFA-like thresholds; urine output score: 3 if urineoutput_apache < 500, 4 if < 200; take max",SOFA-inspired renal dysfunction component. Captures kidney impairment using creatinine and low urine output.
+partial_sofa_like,neurologic_sofa_like + cardiovascular_sofa_like_minimal + respiratory component from pao2_fio2_min + coagulation_sofa_like + liver_sofa_like + renal_sofa_like,"Partial SOFA-inspired organ dysfunction score. Not an official SOFA score because some required clinical inputs, especially vasopressor doses, are missing."
+acid_base_disturbance_proxy,I(d1_arterial_ph_min < 7.35) + I(d1_hco3_min < 22) + I(d1_lactate_max > 2),"Approximate acid-base/metabolic stress feature combining low pH, low bicarbonate, and elevated lactate."
+renal_stress_proxy,I(d1_creatinine_max >= 133) + I(d1_bun_max is high after clinically chosen threshold) + I(urineoutput_apache < 410) + arf_apache,Kidney stress proxy inspired by acute renal failure information in the dataset. The BUN threshold should be chosen with clinical input because units and local practice matter.
