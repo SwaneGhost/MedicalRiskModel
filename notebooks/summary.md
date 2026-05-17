@@ -64,7 +64,7 @@ Expected downloaded files include:
 - `solution_template.csv`
 - `WiDS Datathon 2020 Dictionary.csv`
 
-## 4. Training Data Load
+## 4. Data Overview
 
 The notebook loads `training_v2.csv` into a dataframe called `df`.
 
@@ -73,27 +73,27 @@ Observed training shape:
 ```text
 91,713 rows x 185 columns
 ```
+with columns divided into several categories:
 
-The initial preview and `df.info(show_counts=True)` are used to understand:
+1. identifiers: `encounter_id`, `patient_id`, `hospital_id`, `icu_id`.
+2. target: `hospital_death`.
+3. APACHE-related features: columns containing `apache` in their name **
+4. numeric features: continuous measurements.
+5. categorical features: string or low-cardinality fields.
+6. binary features: numeric fields with only two unique values.
 
-- Column names and data types.
-- Non-null counts.
-- Numeric versus categorical fields.
-- The overall size of the modeling table.
+** for apache score explanation see [APACHE_meaning.png](resources/APACHE_meaning.png)
 
-One early note is that `gender` is stored as a string feature with values like `M` and `F`, although it could later be encoded as a binary feature.
-
-## 5. Target Overview
+One early note is that `gender` is stored as a string feature (categorical) with values like `M` and `F`, although it could later be encoded as a binary feature.
 
 The target column is:
 
 ```text
 hospital_death
 ```
+The target is highly imbalanced, so future modeling should account for class imbalance through careful metrics, stratified validation, class weighting, resampling, or threshold tuning.
 
-The notebook displays both count and rate tables for this target. The main conclusion is that the target is highly imbalanced, so future modeling should account for class imbalance through careful metrics, stratified validation, class weighting, resampling, or threshold tuning.
-
-## 6. Missingness Overview
+## 5. Missingness Overview
 
 The notebook computes feature-level missing rates:
 
@@ -103,7 +103,7 @@ missing = df.isna().mean().sort_values(ascending=False)
 
 The first missingness table shows the features with the highest missing-value rates. The note below the table highlights that many features contain missing values, which is important because missingness may reflect either data-collection limitations or clinically meaningful absence of measurement.
 
-## 7. Missingness CDF
+### 5.1. Missingness CDF
 
 The notebook plots a cumulative distribution of missing rates:
 
@@ -113,7 +113,7 @@ The notebook plots a cumulative distribution of missing rates:
 
 This plot helps identify whether there is a natural cutoff where many features move from moderately missing to heavily missing. The notebook note mentions a visible plateau that may suggest a practical threshold for removing very sparse features.
 
-## 8. Most and Least Missing Features by Class
+### 5.2. Most and Least Missing Features by Class
 
 The next missingness cell compares missing-value percentages by target class.
 
@@ -124,7 +124,7 @@ It produces two grouped bar plots:
 
 Each bar plot uses a different color for each `hospital_death` class. This helps identify features where missingness differs between survivors and non-survivors, which may become important during feature engineering.
 
-## 9. Co-Missingness Heatmap
+### 5.3. Co-Missingness Heatmap
 
 The notebook then analyzes co-missingness for the top 60 most-missing features.
 
@@ -138,7 +138,7 @@ The heatmap displays only the upper triangle of the matrix to avoid duplicate in
 
 This plot is useful for detecting groups of features that tend to be missing together. Those groups may point to shared measurement workflows, hospital-specific data availability, or related clinical panels.
 
-## 10. Numerical Feature Distributions
+## 6. Numerical Feature Distributions
 
 The notebook summarizes numeric columns with `describe().T`, sorted by standard deviation.
 
@@ -151,7 +151,9 @@ This gives an initial look at:
 
 This section prepares the ground for later preprocessing decisions such as scaling, clipping, transformation, and outlier handling.
 
-## 11. Correlation Heatmap
+## 7. Correlation Analysis
+
+### 7.1. Correlation Heatmap
 
 The notebook builds a numeric correlation heatmap while excluding:
 
@@ -162,7 +164,7 @@ The goal is to inspect ordinary non-identifier, non-APACHE numeric relationships
 
 This step helps identify clusters of correlated continuous variables and possible multicollinearity before modeling.
 
-## 12. Categorical Encoding and Hierarchical Clustering
+### 7.2. Categorical Encoding and Hierarchical Clustering
 
 The notebook then prepares a broader feature-clustering analysis:
 
@@ -193,7 +195,7 @@ The notebook creates:
 
 The dendrogram gradient represents feature distance, where lower distance means stronger absolute Spearman correlation.
 
-## 13. Feature Unification Cutoff Analysis
+### 7.3. Feature Unification Cutoff Analysis
 
 The notebook evaluates how many feature groups remain after cutting the dendrogram at different absolute Spearman correlation thresholds.
 
@@ -212,7 +214,7 @@ For each cutoff, the notebook records:
 
 It then plots feature groups remaining versus the cutoff. This helps choose a redundancy threshold for future feature unification or feature removal.
 
-## 14. Strong Pairwise Correlations
+### 7.4. Strong Pairwise Correlations
 
 The notebook prints feature pairs with absolute Pearson correlation above a threshold.
 
@@ -226,7 +228,7 @@ This creates a direct table of highly correlated pairs, complementing the broade
 
 The notebook note says that many features are strongly correlated and may cause multicollinearity.
 
-## 15. Categorical Feature Summary
+## 8. Categorical Feature Summary
 
 The notebook summarizes non-numeric columns by:
 
@@ -240,7 +242,9 @@ This makes it easier to identify categorical variables that may need:
 - Grouping of rare categories.
 - Missing-value handling.
 
-## 16. Numeric Features Versus Mortality
+## 9. Mortality Rate feature correlation
+
+### 9.1. Numeric Features
 
 The notebook compares numeric feature distributions against `hospital_death`.
 
@@ -254,7 +258,7 @@ For each remaining numeric feature, it plots class-separated density histograms.
 
 Future notes in the notebook mention possible next steps such as combined BMI/age analysis and comparing class distributions with KDE or KL divergence.
 
-## 17. Binary Features Versus Mortality
+### 9.2. Binary Features
 
 The notebook identifies binary features as columns with exactly two non-null unique values.
 
@@ -267,7 +271,7 @@ Each binary-feature heatmap shows both:
 
 This is useful for quickly identifying binary indicators associated with different mortality rates.
 
-## 18. Categorical Features Versus Mortality
+### 9.3. Categorical Features
 
 The notebook also treats low-cardinality features as categorical-like variables.
 
@@ -282,7 +286,7 @@ This means numeric columns with up to 12 unique values can be treated as categor
 
 For each selected categorical-like feature, the notebook plots a crosstab heatmap against `hospital_death`, again showing counts and percentages.
 
-## 19. Open Analysis Notes
+## 10. Open Analysis Notes
 
 The notebook currently includes TODOs for future work:
 
