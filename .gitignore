@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Course documents (PDFs, PPTXs, local reference files)
+DOCUMENTS/
