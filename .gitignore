@@ -219,3 +219,6 @@ __marimo__/
 
 # Course documents (PDFs, PPTXs, local reference files)
 DOCUMENTS/
+
+# Generated model artifacts (regenerate by running the notebooks)
+notebooks/best_model_info/
