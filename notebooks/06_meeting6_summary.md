@@ -1,6 +1,6 @@
 # WiDS Datathon 2020 — Meeting 6: Fairness Analysis Summary
 
-**TL;DR:** We audited the CatBoost ICU mortality predictor (Meeting 2 best model, validation ROC-AUC = 0.893, 12 % capacity cutoff) for fairness across three protected attributes. Gender shows no meaningful disparity. Ethnicity shows modest gaps driven mainly by Hispanic over-flagging and Other/Unknown under-detection. **Age group is the most significant concern:** 45–59 year-olds have sensitivity of only 0.525, while 75+ patients are flagged at 19.3 %. The sharpest intersectional disparity is African American patients aged 16–44 (sensitivity = 0.385). Group-specific thresholds close all ethnicity gaps with < 0.07 threshold adjustments and no retraining.
+**TL;DR:** We audited the CatBoost ICU mortality predictor (Meeting 2 best model, validation ROC-AUC = 0.893, 12 % capacity cutoff) for fairness across three protected attributes. Gender shows no meaningful disparity. Ethnicity shows modest gaps driven mainly by Hispanic over-flagging and Other/Unknown under-detection. **Age group is the most significant concern:** 45–59 year-olds have sensitivity of only 0.525, while 75+ patients are flagged at 19.3 %. The sharpest intersectional disparity is African American patients aged 16–44 (sensitivity = 0.385), visible in the full all-group heatmap. Group-specific thresholds close ethnicity gaps with < 0.07 threshold adjustments. We also implement and compare global vs group-specific isotonic recalibration: global calibration leaves the EO gap unchanged (0.085), while naive multi-calibration with a global threshold worsens it (0.358) — the correct deployment pairs group-specific calibration with group-specific thresholds.
 
 ---
 
@@ -11,8 +11,8 @@
 | **Setup** | Load `eval_predictions.csv`, `X_eval_raw.csv`, `metadata.json`; build combined analysis dataframe; create age bins (16–44, 45–59, 60–74, 75+) |
 | **Part 1 — Data-level fairness** | Group distributions, observed mortality rates by group, differential missingness by group |
 | **Part 2 — Subgroup performance** | Per-group metrics (flagging rate, sensitivity, specificity, PPV, NPV, ROC-AUC) for gender, ethnicity, and age group; bar charts; calibration curves |
-| **Part 3 — Intersectional analysis** | Age × gender and age × ethnicity (Caucasian vs African American) sensitivity and flagging-rate heatmaps |
-| **Part 4 — Mitigation** | Group-specific threshold adjustment to equalise sensitivity; before/after table; multi-calibration discussion; distributional justice frameworks |
+| **Part 3 — Intersectional analysis** | Age × gender and age × **all ethnicity groups** sensitivity and flagging-rate heatmaps (cells annotated with n; cells with n < 50 starred) |
+| **Part 4 — Mitigation** | Group-specific threshold adjustment; before/after tables; **implemented** global and group-specific isotonic calibration with comparison; distributional justice frameworks |
 | **Part 5 — Summary** | Narrative for the ICU director with actual numbers, limitations, and next steps |
 
 **Run order:** Imports → Setup → Part 1 → Part 2 → Part 3 → Part 4 → Part 5.
@@ -147,18 +147,26 @@ Three distinct patterns:
 
 Gaps are modest (≤ 0.065). The largest: 16–44 male (0.610) vs female (0.545) — young women who die are somewhat less likely to be flagged than young men. By age 75+ the gap is negligible.
 
-### Age × Ethnicity (Caucasian vs African American, sensitivity)
+### Age × Ethnicity (all groups, sensitivity)
 
-| Age group | African American | Caucasian | Gap |
-|-----------|-----------------|-----------|-----|
-| 16–44 | **0.385** | 0.653 | **0.268** |
-| 45–59 | 0.571 | 0.500 | −0.071 (AA better) |
-| 60–74 | 0.538 | 0.594 | 0.056 |
-| 75+ | 0.833 | 0.645 | −0.188 (AA better) |
+The analysis now shows all ethnic groups (min 15 patients per cell; cells with n < 50 starred). Asian and Native American patients do not appear because they have fewer than 5 deaths per age-group cell — a hard limit for classification metrics.
 
-The 16–44 cell is the sharpest disparity in the entire audit. African American patients aged 16–44 have sensitivity = 0.385 — fewer than 2 in 5 young Black patients who die are flagged, versus 65.3 % for Caucasian 16–44. This cell is small (~15 deaths for AA 16–44) and estimates are uncertain, but the direction is consistent with documented disparities in ICU care access and clinical presentation for young minority patients.
+| Age group | African American | Caucasian | Hispanic | Other/Unknown |
+|-----------|-----------------|-----------|----------|---------------|
+| 16–44 | **0.385** (n=280) | 0.653 (n=1,182) | 0.400† (n=86) | — |
+| 45–59 | 0.571 (n=374) | 0.500 (n=2,065) | 0.400† (n=95) | 0.692 (n=138) |
+| 60–74 | 0.538 (n=409) | 0.594 (n=3,193) | 0.400 (n=132) | 0.476 (n=191) |
+| 75+ | **0.833** (n=169) | 0.645 (n=2,628) | **0.826** (n=146) | 0.800 (n=123) |
 
-In contrast, older Black patients (75+) are detected at higher rates than older white patients (0.833 vs 0.645).
+*† Hispanic 16–44 and 45–59 cells each have an estimated < 10 deaths despite n > 50 (low base-rate age band × small ethnic group) — sensitivity of 0.400 should be treated as a rough estimate only.*
+
+Key observations from the full view:
+- **African American 16–44 (0.385)** remains the sharpest disparity — a 26.8 pp gap vs Caucasian 16–44 (0.653).
+- **Hispanic patients** show consistent patterns: lower sensitivity in younger/mid age bands (0.400) but very high sensitivity at 75+ (0.826), tracking their elevated mortality in that cohort.
+- **African American and Hispanic 75+** both substantially exceed Caucasian 75+ (0.833 and 0.826 vs 0.645) — the model is more sensitive for older minority patients.
+- **Other/Unknown 45–59** shows unexpectedly high sensitivity (0.692) but is a heterogeneous category; interpretation is limited.
+
+The disparity for African American patients is therefore not uniform across age — it is concentrated at 16–44 and reverses at 75+.
 
 ---
 
@@ -192,13 +200,32 @@ For **Other/Unknown**, a small threshold decrease (0.608 → 0.599) closes the s
 
 All four adjustments are < 0.07 threshold units — operationally trivial.
 
-### 4.1 Multi-Calibration (Barda et al. JAMIA 2021)
+### 4.1 Calibration: Global vs Multi-Calibration
 
-Threshold adjustment equalises sensitivity but does **not** fix within-group probability mis-calibration. **Multi-calibration** (Hébert-Johnson et al. 2018; Barda et al. JAMIA 2021) requires that for every subgroup $G$ and predicted-probability level $v$:
+We implemented two post-hoc isotonic recalibration strategies and evaluated them on a held-out half of the eval set (n ≈ 6,191, stratified split).
+
+| Strategy | EO gap (sensitivity) | Dem-parity gap (flagging) |
+|----------|---------------------|--------------------------|
+| Uncalibrated | 0.085 | 0.045 |
+| Global isotonic | 0.085 | 0.042 |
+| Multi-calibration (group-specific isotonic) | **0.358** | **0.155** |
+
+**Global isotonic calibration** reshapes the overall probability scale but barely moves the EO gap (0.085 → 0.085). The relative ranking across groups is almost unaffected.
+
+**Naive multi-calibration worsens the EO gap (0.085 → 0.358).** Group-specific isotonic regression rescales each group's probabilities independently, which distorts cross-group rankings. When a single global 12 % threshold is then applied to the rescaled scores, groups whose probabilities were compressed (e.g. African American) fall below the cutoff while groups whose scores were inflated (e.g. Other/Unknown) rise above it — producing large sensitivity swings in opposite directions.
+
+**The fix:** multi-calibration must be paired with group-specific thresholds to work as intended. The correct deployment sequence is:
+
+1. Fit per-group isotonic calibrators (correct within-group probability bias).
+2. Derive per-group thresholds from the recalibrated scores (equalise sensitivity).
+
+This is the pipeline described in Barda et al. JAMIA 2021. Combining both steps corrects probability mis-calibration and equal-opportunity gaps simultaneously without retraining.
+
+**Multi-calibration** (Hébert-Johnson et al. 2018) formally requires that for every subgroup $G$ and predicted-probability level $v$:
 
 $$\mathbb{E}[Y \mid \hat{p}(X) = v,\; X \in G] = v$$
 
-This is stronger than group-level calibration — it must hold simultaneously for all groups and all risk strata. Post-hoc isotonic recalibration per group achieves this without retraining.
+This is stronger than group-level calibration — it must hold simultaneously for all groups and all risk strata.
 
 ### 4.2 Distributional Justice Frameworks
 
@@ -234,19 +261,20 @@ Female and male patients receive effectively identical model treatment. The 1.7 
 ## Limitations
 
 | Limitation | Impact |
-|-----------|--------|
-| Eval set only (12,382 patients) | Subgroup CIs are wide, especially for small ethnic groups; validate on test set |
+| ---------- | ------ |
+| Eval set only (12,382 patients) | Subgroup CIs are wide for small ethnic groups; validate thresholds on held-out test set |
 | `hospital_id` not available | Hospital-level disparities (staffing, equipment, patient mix) cannot be audited |
-| Multi-calibration not applied | Within-group probability mis-calibration not corrected; isotonic recalibration recommended |
+| Asian / Native American too small for intersectional | Fewer than 5 deaths per age-group cell; excluded from heatmap |
+| Multi-calibration evaluated on 50 % of eval set | Calibration results are indicative; should be validated on the full test set |
 | Historical bias in training data | Model inherits bias from past clinical decisions (test ordering, ICU admission) |
 | Age demographic-parity gap partly normative | Imposing strict demographic parity on age would harm high-risk elderly patients |
 
 ## Recommended Next Steps
 
 1. Validate ethnicity-specific thresholds (Hispanic: 0.6691, Other/Unknown: 0.5991) on the held-out test set.
-2. Investigate age-specific sub-thresholds for the 45–59 cohort to raise sensitivity from 0.525.
-3. Flag the African American × 16–44 intersectional cell for prospective post-deployment monitoring.
-4. Implement isotonic recalibration per ethnic group (multi-calibration) independently of threshold choices.
+2. Deploy the correct multi-calibration pipeline: group-specific isotonic recalibration **followed by** group-specific thresholds on the recalibrated scores.
+3. Investigate age-specific sub-thresholds for the 45–59 cohort to raise sensitivity from 0.525.
+4. Flag the African American × 16–44 intersectional cell for prospective post-deployment monitoring; collect more data before deploying in facilities with high proportions of young Black patients.
 5. Re-audit with `hospital_id` if the preprocessing pipeline is revised.
 
 ---
@@ -255,7 +283,7 @@ Female and male patients receive effectively identical model treatment. The 1.7 
 
 | File | Contents |
 |------|----------|
-| `04_meeting6.ipynb` | Full fairness analysis notebook (35 cells) |
+| `06_meeting6.ipynb` | Full fairness analysis notebook (39 cells) |
 | `best_model_info/eval_predictions.csv` | Model predictions on eval set (input) |
 | `best_model_info/X_eval_raw.csv` | Raw eval features with protected attributes (input) |
 | `best_model_info/metadata.json` | Model metadata, thresholds, overall metrics (input) |
