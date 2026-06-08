@@ -200,32 +200,29 @@ For **Other/Unknown**, a small threshold decrease (0.608 → 0.599) closes the s
 
 All four adjustments are < 0.07 threshold units — operationally trivial.
 
-### 4.1 Calibration: Global vs Multi-Calibration
+### 4.1 Calibration: Global vs Multi-Calibration (4-strategy comparison)
 
-We implemented two post-hoc isotonic recalibration strategies and evaluated them on a held-out half of the eval set (n ≈ 6,191, stratified split).
+We implement four post-hoc strategies and evaluate on a held-out half of the eval set (n ≈ 6,191, stratified 50/50 split).
 
-| Strategy | EO gap (sensitivity) | Dem-parity gap (flagging) |
-|----------|---------------------|--------------------------|
-| Uncalibrated | 0.085 | 0.045 |
-| Global isotonic | 0.085 | 0.042 |
-| Multi-calibration (group-specific isotonic) | **0.358** | **0.155** |
+| # | Strategy | EO gap (sens) | DP gap (flag) |
+|---|----------|:---:|:---:|
+| 1 | Uncalibrated + global threshold | 0.085 | 0.045 |
+| 2 | Global isotonic + global threshold | 0.085 | 0.042 |
+| 3 | Multi-calibration + **global** threshold | **0.358** | **0.155** |
+| 4 | Multi-calibration + **group-specific** thresholds (Barda et al.) | **0.229** | **0.091** |
 
-**Global isotonic calibration** reshapes the overall probability scale but barely moves the EO gap (0.085 → 0.085). The relative ranking across groups is almost unaffected.
+**Strategy 3 (naïve multi-calibration) worsens EO gap (0.085 → 0.358).** After group-specific isotonic calibration each group's scores are on a different scale. A single global threshold then cuts across these rescaled distributions unevenly — African American sensitivity drops to 0.475 while Other/Unknown rises to 0.833.
 
-**Naive multi-calibration worsens the EO gap (0.085 → 0.358).** Group-specific isotonic regression rescales each group's probabilities independently, which distorts cross-group rankings. When a single global 12 % threshold is then applied to the rescaled scores, groups whose probabilities were compressed (e.g. African American) fall below the cutoff while groups whose scores were inflated (e.g. Other/Unknown) rise above it — producing large sensitivity swings in opposite directions.
+**Strategy 4 (Barda et al. full pipeline) partially fixes the EO gap (0.358 → 0.229).** Adding group-specific thresholds on the calibrated scores recovers most of the EO loss but cannot reach zero: isotonic regression produces a step function, and for small groups (Other/Unknown, n = 312) there is no calibrated probability value that yields a sensitivity close to the 0.606 target — the step jumps directly from below 0.606 to 0.833.
 
-**The fix:** multi-calibration must be paired with group-specific thresholds to work as intended. The correct deployment sequence is:
+**Why Section 4 (uncalibrated + group-specific thresholds) achieves near-zero EO gap:** the raw model scores are continuous and fine-grained, giving the threshold search many values to choose from. Isotonic calibration coarsens the score distribution into a step function, reducing threshold precision for small groups.
 
-1. Fit per-group isotonic calibrators (correct within-group probability bias).
-2. Derive per-group thresholds from the recalibrated scores (equalise sensitivity).
+**Take-aways:**
 
-This is the pipeline described in Barda et al. JAMIA 2021. Combining both steps corrects probability mis-calibration and equal-opportunity gaps simultaneously without retraining.
-
-**Multi-calibration** (Hébert-Johnson et al. 2018) formally requires that for every subgroup $G$ and predicted-probability level $v$:
-
-$$\mathbb{E}[Y \mid \hat{p}(X) = v,\; X \in G] = v$$
-
-This is stronger than group-level calibration — it must hold simultaneously for all groups and all risk strata.
+1. **Never apply multi-calibration with a single global threshold** — it dramatically worsens equal opportunity.
+2. **The Section 4 approach (uncalibrated + group-specific thresholds) is already the best strategy for equalising sensitivity** (EO gap ≈ 0 on the full eval set).
+3. **The Barda et al. pipeline adds value through probability accuracy**, not EO improvement: after calibration the predicted probability for each group reflects the true observed mortality rate, making it clinically interpretable.
+4. **Recommended deployment:** (a) fit group-specific isotonic calibrators; (b) apply group-specific thresholds from Section 4 to equalise sensitivity. Calibration fixes probability accuracy; thresholding fixes fairness — orthogonal goals.
 
 ### 4.2 Distributional Justice Frameworks
 
