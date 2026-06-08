@@ -4,7 +4,7 @@
 
 ---
 
-## What is in `04_meeting6.ipynb`
+## What is in `06_meeting6.ipynb`
 
 | Section | Content |
 |---------|---------|
